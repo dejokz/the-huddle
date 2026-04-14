@@ -1,99 +1,35 @@
 """
-CricVoice - Cricket Query Handler (FREE Stack Version)
-Uses:
-- Local Embeddings (sentence-transformers/all-MiniLM-L6-v2) - FREE
-- Groq LLM (Llama 3.1 70B) - FREE tier
+CricVoice - Cricket Query Handler (Data-Only Pattern)
+Returns structured JSON data for Vapi LLM to process
 """
 
 import os
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 from qdrant_client import QdrantClient
 from app.cricket_data import get_player_by_name, get_venue_by_name
-from app.embeddings import LocalEmbedding, cosine_similarity
-
-# Try to import Groq
-try:
-    from groq import Groq
-    GROQ_AVAILABLE = True
-except ImportError:
-    GROQ_AVAILABLE = False
-    print("⚠️ Groq not installed. LLM features will not work.")
+from app.embeddings import LocalEmbedding
 
 # Configuration
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 class CricketQueryHandler:
-    """Handle cricket-related voice queries using FREE stack"""
+    """Handle cricket-related queries - returns data only, no LLM processing"""
     
     def __init__(self):
         self.qdrant = QdrantClient(url=QDRANT_URL)
-        self.embeddings = LocalEmbedding()  # FREE, local
-        
-        # Initialize Groq if available
-        if GROQ_AVAILABLE and GROQ_API_KEY:
-            self.llm = Groq(api_key=GROQ_API_KEY)
-            print("[CricketHandler] Groq LLM initialized")
-        else:
-            self.llm = None
-            print("[CricketHandler] LLM not available - set GROQ_API_KEY")
+        self.embeddings = LocalEmbedding()
     
     def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding using local model (FREE)"""
+        """Get embedding using local model"""
         return self.embeddings.encode(text)
     
-    def _generate_response(self, query: str, context: List[Dict]) -> str:
-        """Generate response using Groq LLM (FREE tier)"""
-        if not self.llm:
-            return "I'm sorry, the LLM is not configured. Please set GROQ_API_KEY."
-        
-        # Format context
-        context_text = "\n\n".join([
-            f"Context {i+1}:\n{json.dumps(item, indent=2)}"
-            for i, item in enumerate(context[:3])
-        ])
-        
-        system_prompt = """You are CricVoice, an expert cricket analyst specializing in IPL fantasy leagues.
-You speak with the authority of a seasoned commentator.
-
-Your style:
-- Enthusiastic but knowledgeable
-- Use cricket terminology naturally
-- Give fantasy-relevant insights
-- Be conversational, not robotic
-- Keep responses concise (2-3 sentences max)
-- Sound like you're recounting matches you watched live
-
-Respond naturally as if speaking to a friend."""
-
-        user_prompt = f"""User asked: "{query}"
-
-Here is relevant information from the database:
-{context_text}
-
-Provide a natural, conversational response as CricVoice:"""
-
-        try:
-            response = self.llm.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",  # FREE tier - Llama 4 Scout (latest & fastest)
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=200,
-                temperature=0.7
-            )
-            
-            return response.choices[0].message.content
-            
-        except Exception as e:
-            print(f"[Groq Error] {e}")
-            # Fallback: return context summary
-            return f"Based on the data: {context[0].get('description', 'No details available')}" if context else "I don't have that information."
+    def _format_data_response(self, data: Dict) -> str:
+        """Format data as JSON string for Vapi LLM"""
+        return json.dumps(data, indent=2)
     
     def query_match_moments(self, query: str) -> Dict:
-        """Search for specific match moments"""
+        """Search for specific match moments - returns raw data"""
         try:
             embedding = self._get_embedding(query)
             
@@ -111,18 +47,22 @@ Provide a natural, conversational response as CricVoice:"""
                     "event": payload.get("event_type"),
                     "description": payload.get("description"),
                     "players": payload.get("players_involved", []),
-                    "fantasy_impact": payload.get("fantasy_impact"),
-                    "score": r.score
+                    "fantasy_impact": payload.get("fantasy_impact")
                 })
             
-            response_text = self._generate_response(query, moments)
+            # Return raw data for Vapi LLM to process
+            data = {
+                "query": query,
+                "type": "match_moments",
+                "results_found": len(moments),
+                "moments": moments
+            }
             
             return {
                 "success": True,
                 "query": query,
-                "response": response_text,
-                "moments_found": len(moments),
-                "moments": moments
+                "response": self._format_data_response(data),
+                "data": data
             }
             
         except Exception as e:
@@ -130,15 +70,14 @@ Provide a natural, conversational response as CricVoice:"""
             return {
                 "success": False,
                 "error": str(e),
-                "response": "I couldn't find information about that match moment."
+                "response": "{\"error\": \"Could not retrieve match moments\"}"
             }
     
     def query_player_stats(self, player_name: str, query: str = "") -> Dict:
-        """Get player statistics and insights"""
-        # First check direct lookup
-        player = get_player_by_name(player_name)
-        
+        """Get player statistics - returns raw data"""
         try:
+            player = get_player_by_name(player_name)
+            
             if player:
                 # Direct match found
                 player_data = {
@@ -161,20 +100,15 @@ Provide a natural, conversational response as CricVoice:"""
                     limit=1
                 ).points
                 
-                context = [player_data]
+                context = {"player_data": player_data}
                 if results:
-                    context.append(results[0].payload)
-                
-                response_text = self._generate_response(
-                    query or f"Tell me about {player_name}", 
-                    context
-                )
+                    context["additional_context"] = results[0].payload
                 
                 return {
                     "success": True,
                     "player": player_name,
-                    "response": response_text,
-                    "stats": player_data
+                    "response": self._format_data_response(context),
+                    "data": context
                 }
             else:
                 # Search in Qdrant
@@ -186,16 +120,18 @@ Provide a natural, conversational response as CricVoice:"""
                 ).points
                 
                 players = [r.payload for r in results]
-                response_text = self._generate_response(
-                    query or f"Tell me about {player_name}", 
-                    players
-                )
+                data = {
+                    "query": query or f"stats for {player_name}",
+                    "type": "player_search",
+                    "players_found": len(players),
+                    "players": players
+                }
                 
                 return {
                     "success": True,
                     "player": player_name,
-                    "response": response_text,
-                    "players_found": len(players)
+                    "response": self._format_data_response(data),
+                    "data": data
                 }
                 
         except Exception as e:
@@ -203,11 +139,11 @@ Provide a natural, conversational response as CricVoice:"""
             return {
                 "success": False,
                 "error": str(e),
-                "response": f"I couldn't find statistics for {player_name}."
+                "response": f"{{\"error\": \"Could not find statistics for {player_name}\"}}"
             }
     
     def query_venue_insights(self, venue_name: str) -> Dict:
-        """Get venue/ground information"""
+        """Get venue/ground information - returns raw data"""
         venue = get_venue_by_name(venue_name)
         
         try:
@@ -224,16 +160,11 @@ Provide a natural, conversational response as CricVoice:"""
                     "characteristics": venue.characteristics
                 }
                 
-                response_text = self._generate_response(
-                    f"How is the pitch at {venue_name}?",
-                    [venue_data]
-                )
-                
                 return {
                     "success": True,
                     "venue": venue_name,
-                    "response": response_text,
-                    "details": venue_data
+                    "response": self._format_data_response(venue_data),
+                    "data": venue_data
                 }
             else:
                 # Search in Qdrant
@@ -245,12 +176,18 @@ Provide a natural, conversational response as CricVoice:"""
                 ).points
                 
                 venues = [r.payload for r in results]
-                response_text = self._generate_response(f"Tell me about {venue_name}", venues)
+                data = {
+                    "venue_query": venue_name,
+                    "type": "venue_search",
+                    "venues_found": len(venues),
+                    "venues": venues
+                }
                 
                 return {
                     "success": True,
                     "venue": venue_name,
-                    "response": response_text
+                    "response": self._format_data_response(data),
+                    "data": data
                 }
                 
         except Exception as e:
@@ -258,11 +195,11 @@ Provide a natural, conversational response as CricVoice:"""
             return {
                 "success": False,
                 "error": str(e),
-                "response": f"I couldn't find information about {venue_name}."
+                "response": f"{{\"error\": \"Could not find information about {venue_name}\"}}"
             }
     
     def query_fantasy_advice(self, query: str) -> Dict:
-        """Get fantasy league recommendations"""
+        """Get fantasy league recommendations - returns raw data"""
         try:
             embedding = self._get_embedding(query)
             
@@ -284,13 +221,18 @@ Provide a natural, conversational response as CricVoice:"""
                     "alternative": payload.get("alternative")
                 })
             
-            response_text = self._generate_response(query, scenarios)
+            data = {
+                "query": query,
+                "type": "fantasy_advice",
+                "scenarios_found": len(scenarios),
+                "scenarios": scenarios
+            }
             
             return {
                 "success": True,
                 "query": query,
-                "response": response_text,
-                "recommendations": len(scenarios)
+                "response": self._format_data_response(data),
+                "data": data
             }
             
         except Exception as e:
@@ -298,11 +240,11 @@ Provide a natural, conversational response as CricVoice:"""
             return {
                 "success": False,
                 "error": str(e),
-                "response": "I couldn't provide fantasy advice right now."
+                "response": "{\"error\": \"Could not provide fantasy advice\"}"
             }
     
     def handle_general_query(self, query: str) -> Dict:
-        """Handle general cricket queries by searching all collections"""
+        """Handle general cricket queries - returns raw data from all collections"""
         try:
             embedding = self._get_embedding(query)
             
@@ -320,7 +262,7 @@ Provide a natural, conversational response as CricVoice:"""
                         all_results.append({
                             "collection": collection,
                             "score": r.score,
-                            "payload": r.payload
+                            "data": r.payload
                         })
                 except Exception as e:
                     print(f"[Warning] Search failed for {collection}: {e}")
@@ -330,15 +272,19 @@ Provide a natural, conversational response as CricVoice:"""
             
             # Take top 3
             top_results = all_results[:3]
-            context = [r["payload"] for r in top_results]
             
-            response_text = self._generate_response(query, context)
+            data = {
+                "query": query,
+                "type": "general_search",
+                "results_found": len(top_results),
+                "results": top_results
+            }
             
             return {
                 "success": True,
                 "query": query,
-                "response": response_text,
-                "sources": [r["collection"] for r in top_results]
+                "response": self._format_data_response(data),
+                "data": data
             }
             
         except Exception as e:
@@ -346,7 +292,7 @@ Provide a natural, conversational response as CricVoice:"""
             return {
                 "success": False,
                 "error": str(e),
-                "response": "I'm having trouble finding that information."
+                "response": "{\"error\": \"Could not find information\"}"
             }
 
 
