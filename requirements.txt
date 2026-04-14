@@ -1,0 +1,16 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+qdrant-client==1.7.0
+python-dotenv==1.0.0
+pydantic==2.5.3
+httpx==0.26.0
+
+# Free LLM - Groq (free tier available)
+groq>=0.4.0
+
+# Free Local Embeddings - Sentence Transformers
+sentence-transformers>=2.5.0
+torch>=2.0.0
+
+# Optional: Keep OpenAI for backward compatibility
+# openai==1.10.0

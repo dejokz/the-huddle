@@ -1,0 +1,46 @@
+# Environment variables (contains secrets)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local config
+inbound_support_config.json
+
+# ngrok
+ngrok.exe
+ngrok.zip
+
+# Call logs
+call-logs-*.json
+
+# Test/temp scripts
+*_test.py
+test_*.py
+check_*.py
+fix_*.py
+update_*.py
+verify_*.py
