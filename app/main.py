@@ -1,5 +1,5 @@
 """
-The Huddle - Multi-Sport Fantasy Assist Platform
+Bengaluru Sahayaka - Voice-First AI Agent for Local Government Services
 FastAPI backend for Vapi Squads
 Returns raw data for Vapi's LLM to process
 """
@@ -15,89 +15,83 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-app = FastAPI(title="The Huddle - Multi-Sport Fantasy Assist")
+app = FastAPI(title="Bengaluru Sahayaka - Government Services Assist")
 
 # ------------------------------------------------------------------
-# Sport handler registry
+# Service handler registry
 # ------------------------------------------------------------------
-SPORT_HANDLERS = {}
+SERVICE_HANDLERS = {}
 
 
 def _load_handlers():
-    """Lazy-load sport handlers so import errors don't crash startup."""
-    global SPORT_HANDLERS
-    if SPORT_HANDLERS:
+    """Lazy-load service handlers so import errors don't crash startup."""
+    global SERVICE_HANDLERS
+    if SERVICE_HANDLERS:
         return
 
     try:
-        from app.sports.cricket import (
-            get_match_moment as cricket_match,
-            get_player_stats as cricket_player,
-            get_venue_insights as cricket_venue,
-            get_fantasy_advice as cricket_fantasy,
-            handle_general_query as cricket_general,
+        from app.services.certificates import (
+            assess_eligibility as cert_eligibility,
+            generate_document_checklist as cert_checklist,
+            get_procedure_steps as cert_procedure,
+            get_affidavit_template as cert_affidavit,
+            get_office_info as cert_office,
+            general_cert_query as cert_general,
         )
 
-        SPORT_HANDLERS["cricket"] = {
-            "query_match_moment": cricket_match,
-            "get_player_stats": cricket_player,
-            "get_venue_insights": cricket_venue,
-            "get_fantasy_advice": cricket_fantasy,
-            "general_sport_query": cricket_general,
+        SERVICE_HANDLERS["certificates"] = {
+            "assess_eligibility": cert_eligibility,
+            "generate_document_checklist": cert_checklist,
+            "get_procedure_steps": cert_procedure,
+            "get_affidavit_template": cert_affidavit,
+            "get_office_info": cert_office,
+            "general_cert_query": cert_general,
         }
-        logger.info("[INIT] Cricket handler registered")
+        logger.info("[INIT] Certificate handler registered")
     except Exception as e:
-        logger.error(f"[INIT] Cricket handler failed: {e}")
+        logger.error(f"[INIT] Certificate handler failed: {e}")
 
     try:
-        from app.sports.football import (
-            get_match_moment as football_match,
-            get_player_stats as football_player,
-            get_venue_insights as football_venue,
-            get_fantasy_advice as football_fantasy,
-            handle_general_query as football_general,
+        from app.services.tax import (
+            get_tax_estimate as tax_estimate,
+            get_payment_options as tax_payment,
+            general_tax_query as tax_general,
         )
 
-        SPORT_HANDLERS["football"] = {
-            "query_match_moment": football_match,
-            "get_player_stats": football_player,
-            "get_venue_insights": football_venue,
-            "get_fantasy_advice": football_fantasy,
-            "general_sport_query": football_general,
+        SERVICE_HANDLERS["tax"] = {
+            "get_tax_estimate": tax_estimate,
+            "get_payment_options": tax_payment,
+            "general_tax_query": tax_general,
         }
-        logger.info("[INIT] Football handler registered")
+        logger.info("[INIT] Tax handler registered")
     except Exception as e:
-        logger.error(f"[INIT] Football handler failed: {e}")
+        logger.error(f"[INIT] Tax handler failed: {e}")
 
     try:
-        from app.sports.chess import (
-            get_match_moment as chess_match,
-            get_player_stats as chess_player,
-            get_venue_insights as chess_venue,
-            get_fantasy_advice as chess_fantasy,
-            handle_general_query as chess_general,
+        from app.services.grievances import (
+            file_complaint as grievance_file,
+            get_complaint_status as grievance_status,
+            general_grievance_query as grievance_general,
         )
 
-        SPORT_HANDLERS["chess"] = {
-            "query_match_moment": chess_match,
-            "get_player_stats": chess_player,
-            "get_venue_insights": chess_venue,
-            "get_fantasy_advice": chess_fantasy,
-            "general_sport_query": chess_general,
+        SERVICE_HANDLERS["grievances"] = {
+            "file_complaint": grievance_file,
+            "get_complaint_status": grievance_status,
+            "general_grievance_query": grievance_general,
         }
-        logger.info("[INIT] Chess handler registered")
+        logger.info("[INIT] Grievance handler registered")
     except Exception as e:
-        logger.error(f"[INIT] Chess handler failed: {e}")
+        logger.error(f"[INIT] Grievance handler failed: {e}")
 
 
 _load_handlers()
 
 
 # ------------------------------------------------------------------
-# Generic sport webhook dispatcher
+# Generic service webhook dispatcher
 # ------------------------------------------------------------------
-async def dispatch_sport_webhook(sport: str, request: Request):
-    """Handle Vapi tool-calls for a specific sport."""
+async def dispatch_service_webhook(service: str, request: Request):
+    """Handle Vapi tool-calls for a specific government service."""
     try:
         body = await request.json()
         message_type = body.get("message", {}).get("type")
@@ -121,23 +115,23 @@ async def dispatch_sport_webhook(sport: str, request: Request):
                 arguments = function_call.get("parameters", {})
                 tool_call_id = body.get("message", {}).get("toolCallId")
 
-            logger.info(f"[{sport.upper()}] {function_name}: {arguments}")
+            logger.info(f"[{service.upper()}] {function_name}: {arguments}")
 
-            handler_map = SPORT_HANDLERS.get(sport)
+            handler_map = SERVICE_HANDLERS.get(service)
             if not handler_map:
-                logger.error(f"[{sport.upper()}] No handler registered")
+                logger.error(f"[{service.upper()}] No handler registered")
                 return {"results": []}
 
             func = handler_map.get(function_name)
             if not func:
-                logger.error(f"[{sport.upper()}] Unknown function: {function_name}")
+                logger.error(f"[{service.upper()}] Unknown function: {function_name}")
                 return {"results": []}
 
             # Call handler and extract response payload
             raw_result = func(**arguments)
             response_text = raw_result.get("response", json.dumps(raw_result, indent=2))
 
-            logger.info(f"[{sport.upper()} RETURNING] {response_text[:150]}...")
+            logger.info(f"[{service.upper()} RETURNING] {response_text[:150]}...")
 
             return {
                 "results": [{
@@ -149,28 +143,21 @@ async def dispatch_sport_webhook(sport: str, request: Request):
         return {"results": []}
 
     except Exception as e:
-        logger.error(f"[{sport.upper()} ERROR] {e}")
+        logger.error(f"[{service.upper()} ERROR] {e}")
         traceback.print_exc()
         return {"results": []}
 
 
-@app.post("/vapi/webhook/{sport}")
-async def sport_webhook(sport: str, request: Request):
-    """Dynamic webhook for any registered sport."""
-    return await dispatch_sport_webhook(sport, request)
-
-
-# Legacy redirect for backward compatibility
-@app.post("/vapi/cricket-webhook")
-async def legacy_cricket_webhook(request: Request):
-    """Deprecated: use /vapi/webhook/cricket instead."""
-    return await dispatch_sport_webhook("cricket", request)
+@app.post("/vapi/webhook/{service}")
+async def service_webhook(service: str, request: Request):
+    """Dynamic webhook for any registered government service."""
+    return await dispatch_service_webhook(service, request)
 
 
 @app.get("/")
 async def root():
     return {
         "status": "running",
-        "mode": "multi-sport-data-only",
-        "sports": list(SPORT_HANDLERS.keys()),
+        "mode": "bengaluru-government-services",
+        "services": list(SERVICE_HANDLERS.keys()),
     }

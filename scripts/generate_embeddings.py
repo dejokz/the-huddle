@@ -70,38 +70,62 @@ def main():
         print("Usage: python scripts/generate_embeddings.py <sport>")
         sys.exit(1)
 
-    sport = sys.argv[1]
-    data_module_path = f"app.sports.{sport}.{sport}_data"
+    service = sys.argv[1]
     data_dir = project_root / "data"
 
-    try:
-        # Load module directly from file to avoid triggering package __init__ imports
-        file_path = project_root / "app" / "sports" / sport / f"{sport}_data.py"
-        spec = importlib.util.spec_from_file_location(f"{sport}_data", file_path)
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f"{sport}_data"] = mod
-        spec.loader.exec_module(mod)
-    except Exception as e:
-        print(f"[ERROR] Could not load {file_path}: {e}")
+    # Try common naming patterns for the data module
+    naming_candidates = [f"{service}_data.py"]
+    if service == "certificates":
+        naming_candidates.insert(0, "cert_data.py")
+    if service == "grievances":
+        naming_candidates.insert(0, "grievance_data.py")
+
+    file_path = None
+    mod = None
+    for candidate in naming_candidates:
+        candidate_path = project_root / "app" / "services" / service / candidate
+        if candidate_path.exists():
+            file_path = candidate_path
+            module_name = candidate.replace(".py", "")
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = mod
+                spec.loader.exec_module(mod)
+                break
+            except Exception as e:
+                print(f"[WARN] Could not load {candidate_path}: {e}")
+                continue
+
+    if mod is None:
+        print(f"[ERROR] Could not find a valid data module for service '{service}'. Tried: {naming_candidates}")
         sys.exit(1)
 
-    mappings = {
-        "match_moments": ("get_all_moments", "moment_id"),
-        "players": ("get_all_players", "player_id"),
-        "venues": ("get_all_venues", "venue_id"),
-        "strategies": ("get_all_strategies", "strategy_id"),
-        "fantasy_scenarios": ("get_all_scenarios", "scenario_id"),
-    }
+    # Discover available getters dynamically
+    # Expected pattern: get_all_<collection>() where collection maps to cert_procedures, cert_documents, etc.
+    available_getters = [name for name in dir(mod) if name.startswith("get_all_")]
 
     generated = []
-    for collection_suffix, (getter_name, id_key) in mappings.items():
-        if not hasattr(mod, getter_name):
-            continue
+    for getter_name in available_getters:
         items = getattr(mod, getter_name)()
         if not items:
             continue
-        collection_name = f"{sport}_{collection_suffix}"
+        # collection_suffix from getter_name: get_all_procedures -> procedures
+        collection_suffix = getter_name.replace("get_all_", "")
+        collection_name = f"{service}_{collection_suffix}"
         file_path = data_dir / f"{collection_name}_embeddings.json"
+
+        # Infer id_key from first item
+        id_key = None
+        if items:
+            keys = list(items[0].keys())
+            for candidate in ("step_id", "doc_id", "template_id", "office_id", "id"):
+                if candidate in keys:
+                    id_key = candidate
+                    break
+        if not id_key:
+            id_key = "id"
+
         embeddings = generate_collection_embeddings(items, id_key=id_key)
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(embeddings, f, indent=2)
@@ -109,9 +133,9 @@ def main():
         generated.append(file_path.name)
 
     if not generated:
-        print("[WARN] No collections generated. Check that your data module exports the expected getters.")
+        print("[WARN] No collections generated. Check that your data module exports getters like get_all_procedures, get_all_documents, etc.")
     else:
-        print(f"[DONE] Generated {len(generated)} embedding files for {sport}.")
+        print(f"[DONE] Generated {len(generated)} embedding files for {service}.")
 
 
 if __name__ == "__main__":
