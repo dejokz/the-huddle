@@ -43,24 +43,20 @@ class LocalEmbedding:
         return cls._instance
     
     def _load_data(self):
-        """Load pre-computed embeddings from JSON"""
+        """Load pre-computed embeddings from JSON, auto-detecting sport prefixes."""
         data_dir = Path(__file__).parent.parent / "data"
         
-        collections = [
-            "match_moments",
-            "player_context",
-            "venue_insights",
-            "fantasy_scenarios"
-        ]
-        
-        for collection in collections:
-            file_path = data_dir / f"{collection}_embeddings.json"
-            if file_path.exists():
-                with open(file_path) as f:
+        for file_path in data_dir.glob("*_embeddings.json"):
+            # Filename pattern: {sport}_{collection}_embeddings.json
+            # e.g., cricket_match_moments_embeddings.json
+            stem = file_path.stem  # removes .json
+            collection = stem.replace("_embeddings", "")
+            try:
+                with open(file_path, encoding="utf-8") as f:
                     self._data[collection] = json.load(f)
                 print(f"[LocalEmbedding] Loaded {collection}: {len(self._data[collection])} items")
-            else:
-                print(f"[LocalEmbedding] Warning: {file_path} not found")
+            except Exception as e:
+                print(f"[LocalEmbedding] Warning: failed to load {file_path}: {e}")
                 self._data[collection] = []
     
     def encode(self, text: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:

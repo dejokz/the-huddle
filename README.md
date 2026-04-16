@@ -1,237 +1,142 @@
-# 🎙️ Voice Memory Starter
+# 🏟️ The Huddle
 
-A minimal project to experiment with **Vapi** (voice AI) + **Qdrant** (vector database).
+A **multi-sport fantasy assist platform** powered by **Vapi Squads** and **Qdrant**.
 
-## What This Does
+Users call a phone number, are greeted by the Huddle Host, pick their sport (Cricket, Football, or Chess), and get seamlessly handed off to a specialized sport guru that answers fantasy and stats questions by voice.
 
 ```
-Voice Input → Vapi → Your Backend → Qdrant → Semantic Search → Voice Response
+Voice Input → Vapi Squad → Huddle Host → Sport Guru → FastAPI → Qdrant → Voice Response
 ```
 
-**Use it like:**
-- *"Remember that my Docker container crashes with exit code 137"* → Stored in Qdrant
-- *"Why is my container failing?"* → Finds & speaks back your memory
+## Supported Sports
 
-## 🚀 Quick Start
+| Sport | Guru | Example Queries |
+|-------|------|-----------------|
+| 🏏 Cricket | Cricket Guru | "How did Kohli perform?" / "Who should I captain?" |
+| ⚽ Football | Football Guru | "Is Haaland a good captain this week?" / "Tell me about Old Trafford" |
+| ♟️ Chess | Chess Guru | "How good is Gukesh?" / "What opening should I learn?" |
 
-### 1. Prerequisites
+## Project Structure
 
-- Docker & Docker Compose
-- OpenAI API key
-- (Optional) Vapi account for voice testing
+```
+the-huddle/
+├── app/
+│   ├── main.py                      # FastAPI app with sport webhooks
+│   ├── embeddings.py                # Deterministic embedding loader
+│   └── sports/
+│       ├── __init__.py              # Sport registry
+│       ├── base_handler.py          # Base class for all sport handlers
+│       ├── cricket/
+│       │   ├── cricket_data.py      # Cricket match/player/venue data
+│       │   ├── cricket_handler.py   # Qdrant queries for cricket
+│       │   └── __init__.py
+│       ├── football/
+│       │   ├── football_data.py
+│       │   ├── football_handler.py
+│       │   └── __init__.py
+│       └── chess/
+│           ├── chess_data.py
+│           ├── chess_handler.py
+│           └── __init__.py
+├── data/
+│   ├── cricket_*.json               # Cricket embeddings
+│   ├── football_*.json              # Football embeddings
+│   └── chess_*.json                 # Chess embeddings
+├── scripts/
+│   ├── generate_embeddings.py       # Generate embeddings for any sport
+│   └── setup_qdrant.py              # Create collections & load data
+├── vapi-squad/
+│   ├── squad-config.json            # Vapi Squad configuration template
+│   ├── huddle-host-prompt.md
+│   ├── cricket-guru-prompt.md
+│   ├── football-guru-prompt.md
+│   └── chess-guru-prompt.md
+├── docker-compose.yml
+└── requirements.txt
+```
 
-### 2. Setup Environment
+## Quick Start
+
+### 1. Start Qdrant
 
 ```bash
-cd starter-project
-cp .env.example .env
-# Edit .env with your keys
+docker start qdrant
+# or if not created:
+docker run -d -p 6333:6333 qdrant/qdrant
 ```
 
-### 3. Start Services
+### 2. Set up Collections
 
 ```bash
-# Start Qdrant + Backend
-docker-compose up
-
-# Or run just Qdrant locally if you prefer:
-# docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+cd the-huddle
+python scripts/setup_qdrant.py
 ```
 
-### 4. Test the API
+This creates all 12 collections (4 per sport) and loads the pre-computed embeddings.
+
+### 3. Start the Backend
 
 ```bash
-# Check health
-curl http://localhost:8000/health
-
-# Store a memory
-curl -X POST http://localhost:8000/memories \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Docker exit code 137 means OOM kill", "category": "tech"}'
-
-# Search memories (semantic!)
-curl -X POST http://localhost:8000/memories/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "why is my container dying", "limit": 3}'
-
-# List all memories
-curl http://localhost:8000/memories
+uvicorn app.main:app --reload --port 8000
 ```
 
-## 🔌 Connect to Vapi (For Voice)
-
-### Step 1: Expose Your Local Server
+### 4. Expose with ngrok
 
 ```bash
-# Install ngrok
-# Then expose port 8000
 ngrok http 8000
-
-# Copy the https URL (e.g., https://abc123.ngrok-free.app)
 ```
 
-### Step 2: Update Environment
+Copy the `https` URL (e.g., `https://abc123.ngrok-free.app`).
 
-```bash
-# In .env, set:
-BACKEND_URL=https://abc123.ngrok-free.app
-```
+### 5. Configure Vapi Squad
 
-### Step 3: Configure Vapi Assistant
+1. In the Vapi dashboard, create **4 assistants**:
+   - **Huddle Host** — no server URL needed
+   - **Cricket Guru** — server URL: `{ngrok-url}/vapi/webhook/cricket`
+   - **Football Guru** — server URL: `{ngrok-url}/vapi/webhook/football`
+   - **Chess Guru** — server URL: `{ngrok-url}/vapi/webhook/chess`
 
-1. Go to https://vapi.ai/dashboard
-2. Create a new Assistant
-3. Get the assistant config:
+2. Copy the system prompts from `vapi-squad/*.md` into each assistant.
+
+3. Add the same 5 functions to each guru:
+   - `query_match_moment(query: string)`
+   - `get_player_stats(player_name: string)`
+   - `get_venue_insights(venue_name: string)`
+   - `get_fantasy_advice(query: string)`
+   - `general_sport_query(query: string)`
+
+4. Add handoff tools so the Host can transfer to each guru, and each guru can transfer back to the Host.
+
+5. Create a **Squad** in Vapi and add the 4 members. See `vapi-squad/squad-config.json` for the structure.
+
+## Adding a New Sport
+
+1. Create `app/sports/<sport>/<sport>_data.py` with the standard getters:
+   - `get_all_moments()`, `get_all_players()`, `get_all_venues()`, `get_all_scenarios()`
+
+2. Create `app/sports/<sport>/<sport>_handler.py` implementing `BaseSportHandler`.
+
+3. Create `app/sports/<sport>/__init__.py` exporting the handler functions.
+
+4. Generate embeddings:
    ```bash
-   curl http://localhost:8000/vapi/assistant-config
+   python scripts/generate_embeddings.py <sport>
    ```
-4. Copy the JSON into your Vapi assistant settings
-5. Set the Server URL to your ngrok URL + `/vapi/webhook`
 
-### Step 4: Test Voice!
+5. Register the sport in `app/main.py` by adding the handler imports to `SPORT_HANDLERS`.
 
-Click "Test Call" in Vapi dashboard and try:
-- *"Remember that I have a meeting tomorrow at 3 PM"*
-- *"What do I have scheduled tomorrow?"*
+6. Re-run `python scripts/setup_qdrant.py`.
 
-## 📁 Project Structure
+## Architecture Notes
 
-```
-starter-project/
-├── docker-compose.yml      # Qdrant + FastAPI services
-├── Dockerfile              # Backend container
-├── requirements.txt        # Python deps
-├── .env                    # Your secrets (gitignored)
-├── .env.example            # Template
-├── README.md               # This file
-└── app/
-    └── main.py             # FastAPI app with all endpoints
-```
+- **Data-only pattern:** The backend returns raw JSON. Vapi's built-in LLM converts it into natural language.
+- **Deterministic embeddings:** Uses hash-based embeddings (no PyTorch/OpenAI APIs needed).
+- **Separate webhooks:** Each sport guru has its own endpoint for clean separation.
 
-## 🔍 Key Concepts You'll Learn
+## Troubleshooting
 
-### Qdrant (Vector Database)
+**Qdrant connection error:** Make sure Docker is running at `localhost:6333`.
 
-```python
-# Store with embedding
-qdrant_client.upsert(
-    collection_name="voice_memories",
-    points=[PointStruct(
-        id=str(uuid.uuid4()),
-        vector=embedding,  # 1536-dimension vector
-        payload={"content": "...", "category": "..."}
-    )]
-)
+**Vapi not calling webhook:** Check that the ngrok URL is updated in the Vapi dashboard and includes the correct `/vapi/webhook/<sport>` path.
 
-# Semantic search
-results = qdrant_client.search(
-    collection_name="voice_memories",
-    query_vector=query_embedding,
-    limit=3
-)
-```
-
-### Vapi (Voice AI)
-
-```python
-# Webhook receives function calls from voice
-@app.post("/vapi/webhook")
-async def vapi_webhook(request: Request):
-    # Vapi sends: {"message": {"type": "function-call", ...}}
-    # You return: {"results": [{"result": "..."}]}
-```
-
-## 🧪 Experiments to Try
-
-### 1. Test Semantic Search
-
-Try these queries and observe how Qdrant finds relevant memories even with different words:
-
-| Query | Should Find |
-|-------|-------------|
-| "why is my container dying" | "Docker exit code 137..." |
-| "memory issue" | "OOM killer", "memory limits" |
-| "when is my meeting" | "Meeting with Priya..." |
-
-### 2. Play with Vapi Functions
-
-Add more functions to `vapi/assistant-config`:
-
-```json
-{
-  "name": "delete_memory",
-  "description": "Delete a memory by content",
-  "parameters": {...}
-}
-```
-
-### 3. Try Different Embedding Models
-
-Change in `main.py`:
-```python
-EMBEDDING_MODEL = "text-embedding-3-large"  # Better, more expensive
-# or
-EMBEDDING_MODEL = "text-embedding-ada-002"  # Older, cheaper
-```
-
-### 4. Add Memory Categories
-
-Modify the schema to filter by category:
-```python
-results = qdrant_client.search(
-    collection_name=COLLECTION_NAME,
-    query_vector=embedding,
-    query_filter=Filter(
-        must=[FieldCondition(key="category", match=MatchValue(value="tech"))]
-    )
-)
-```
-
-## 🎯 Idea Sparking Questions
-
-As you play with this, ask yourself:
-
-1. **What data would be valuable to search semantically?**
-   - Logs, documentation, code, conversations, support tickets?
-
-2. **What workflows could voice simplify?**
-   - Creating tickets, querying dashboards, running commands?
-
-3. **Who needs hands-free access to information?**
-   - Developers, field workers, healthcare staff, drivers?
-
-4. **What context should the AI remember across conversations?**
-   - User preferences, past actions, project context?
-
-## 📚 Resources
-
-- **Qdrant Docs:** https://qdrant.tech/documentation/
-- **Vapi Docs:** https://docs.vapi.ai/
-- **Qdrant Discord:** (join from the problem statement)
-- **Vapi Discord:** (join from the problem statement)
-
-## 🐛 Troubleshooting
-
-### Qdrant connection failed
-```bash
-# Check if Qdrant is running
-docker ps
-curl http://localhost:6333/dashboard/
-```
-
-### OpenAI errors
-```bash
-# Verify your API key
-curl https://api.openai.com/v1/models \
-  -H "Authorization: Bearer $OPENAI_API_KEY"
-```
-
-### Vapi webhook not reaching local
-```bash
-# Verify ngrok is working
-curl https://your-ngrok-url.ngrok-free.app/health
-```
-
----
-
-**Happy experimenting!** Once you have a lightbulb moment, let's build your winning hackathon project. 🚀
+**Empty responses:** Run `python scripts/setup_qdrant.py` to ensure all collections are populated.
