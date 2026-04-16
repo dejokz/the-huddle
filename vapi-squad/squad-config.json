@@ -1,0 +1,25 @@
+{
+  "name": "The Huddle",
+  "members": [
+    {
+      "name": "Huddle Host",
+      "assistantId": "<HOST_ASSISTANT_ID>",
+      "serverUrl": null
+    },
+    {
+      "name": "Cricket Guru",
+      "assistantId": "<CRICKET_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/cricket"
+    },
+    {
+      "name": "Football Guru",
+      "assistantId": "<FOOTBALL_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/football"
+    },
+    {
+      "name": "Chess Guru",
+      "assistantId": "<CHESS_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/chess"
+    }
+  ]
+}

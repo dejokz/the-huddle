@@ -1,6 +1,7 @@
 """
-Alternative: Return raw data instead of generated text
-Let Vapi's LLM handle the natural language generation
+The Huddle - Multi-Sport Fantasy Assist Platform
+FastAPI backend for Vapi Squads
+Returns raw data for Vapi's LLM to process
 """
 
 import os
@@ -14,31 +15,93 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-app = FastAPI(title="CricVoice - Data Only Mode")
+app = FastAPI(title="The Huddle - Multi-Sport Fantasy Assist")
 
-try:
-    from app.cricket_handler import (
-        get_match_moment,
-        get_player_stats,
-        get_venue_insights,
-        get_fantasy_advice,
-        handle_general_query
-    )
-    CRICKET_AVAILABLE = True
-except ImportError as e:
-    CRICKET_AVAILABLE = False
-    logger.error(f"[ERROR] {e}")
+# ------------------------------------------------------------------
+# Sport handler registry
+# ------------------------------------------------------------------
+SPORT_HANDLERS = {}
 
-@app.post("/vapi/cricket-webhook")
-async def cricket_webhook(request: Request):
-    """
-    Returns RAW DATA instead of generated text.
-    Vapi's GPT-5.4 will process this data and generate response.
-    """
+
+def _load_handlers():
+    """Lazy-load sport handlers so import errors don't crash startup."""
+    global SPORT_HANDLERS
+    if SPORT_HANDLERS:
+        return
+
+    try:
+        from app.sports.cricket import (
+            get_match_moment as cricket_match,
+            get_player_stats as cricket_player,
+            get_venue_insights as cricket_venue,
+            get_fantasy_advice as cricket_fantasy,
+            handle_general_query as cricket_general,
+        )
+
+        SPORT_HANDLERS["cricket"] = {
+            "query_match_moment": cricket_match,
+            "get_player_stats": cricket_player,
+            "get_venue_insights": cricket_venue,
+            "get_fantasy_advice": cricket_fantasy,
+            "general_sport_query": cricket_general,
+        }
+        logger.info("[INIT] Cricket handler registered")
+    except Exception as e:
+        logger.error(f"[INIT] Cricket handler failed: {e}")
+
+    try:
+        from app.sports.football import (
+            get_match_moment as football_match,
+            get_player_stats as football_player,
+            get_venue_insights as football_venue,
+            get_fantasy_advice as football_fantasy,
+            handle_general_query as football_general,
+        )
+
+        SPORT_HANDLERS["football"] = {
+            "query_match_moment": football_match,
+            "get_player_stats": football_player,
+            "get_venue_insights": football_venue,
+            "get_fantasy_advice": football_fantasy,
+            "general_sport_query": football_general,
+        }
+        logger.info("[INIT] Football handler registered")
+    except Exception as e:
+        logger.error(f"[INIT] Football handler failed: {e}")
+
+    try:
+        from app.sports.chess import (
+            get_match_moment as chess_match,
+            get_player_stats as chess_player,
+            get_venue_insights as chess_venue,
+            get_fantasy_advice as chess_fantasy,
+            handle_general_query as chess_general,
+        )
+
+        SPORT_HANDLERS["chess"] = {
+            "query_match_moment": chess_match,
+            "get_player_stats": chess_player,
+            "get_venue_insights": chess_venue,
+            "get_fantasy_advice": chess_fantasy,
+            "general_sport_query": chess_general,
+        }
+        logger.info("[INIT] Chess handler registered")
+    except Exception as e:
+        logger.error(f"[INIT] Chess handler failed: {e}")
+
+
+_load_handlers()
+
+
+# ------------------------------------------------------------------
+# Generic sport webhook dispatcher
+# ------------------------------------------------------------------
+async def dispatch_sport_webhook(sport: str, request: Request):
+    """Handle Vapi tool-calls for a specific sport."""
     try:
         body = await request.json()
         message_type = body.get("message", {}).get("type")
-        
+
         if message_type in ["function-call", "tool-calls"]:
             # Extract function call details
             if message_type == "tool-calls":
@@ -57,110 +120,57 @@ async def cricket_webhook(request: Request):
                 function_name = function_call.get("name")
                 arguments = function_call.get("parameters", {})
                 tool_call_id = body.get("message", {}).get("toolCallId")
-            
-            logger.info(f"[CALL] {function_name}: {arguments}")
-            
-            if not CRICKET_AVAILABLE:
+
+            logger.info(f"[{sport.upper()}] {function_name}: {arguments}")
+
+            handler_map = SPORT_HANDLERS.get(sport)
+            if not handler_map:
+                logger.error(f"[{sport.upper()}] No handler registered")
                 return {"results": []}
-            
-            # Query database WITHOUT LLM processing
-            raw_data = await get_raw_data(function_name, arguments)
-            
-            # Return RAW DATA as string for Vapi LLM to process
-            # Vapi's GPT-5.4 will craft the natural language response
-            data_string = format_data_for_vapi(raw_data)
-            
-            logger.info(f"[RETURNING DATA] {data_string[:150]}...")
-            
+
+            func = handler_map.get(function_name)
+            if not func:
+                logger.error(f"[{sport.upper()}] Unknown function: {function_name}")
+                return {"results": []}
+
+            # Call handler and extract response payload
+            raw_result = func(**arguments)
+            response_text = raw_result.get("response", json.dumps(raw_result, indent=2))
+
+            logger.info(f"[{sport.upper()} RETURNING] {response_text[:150]}...")
+
             return {
                 "results": [{
                     "toolCallId": tool_call_id,
-                    "result": data_string
+                    "result": response_text
                 }]
             }
-        
-        return {"results": []}
-        
-    except Exception as e:
-        logger.error(f"[ERROR] {e}")
+
         return {"results": []}
 
-async def get_raw_data(function_name, parameters):
-    """Get data from Qdrant without LLM processing"""
-    try:
-        if function_name == "query_match_moment":
-            query = parameters.get("query", "")
-            # Query Qdrant directly, get top results
-            from qdrant_client import QdrantClient
-            from app.embeddings import LocalEmbedding
-            
-            client = QdrantClient("localhost:6333")
-            embedding = LocalEmbedding().encode(query)
-            
-            results = client.query_points(
-                collection_name="match_moments",
-                query=embedding,
-                limit=2
-            ).points
-            
-            return {
-                "query": query,
-                "matches_found": len(results),
-                "data": [r.payload for r in results]
-            }
-            
-        elif function_name == "get_player_stats":
-            player_name = parameters.get("player_name", "")
-            from app.cricket_data import get_player_by_name
-            return get_player_by_name(player_name)
-            
-        elif function_name == "get_venue_insights":
-            venue_name = parameters.get("venue_name", "")
-            from app.cricket_data import get_venue_by_name
-            return get_venue_by_name(venue_name)
-            
-        elif function_name == "get_fantasy_advice":
-            query = parameters.get("query", "")
-            # Return fantasy scenarios
-            from qdrant_client import QdrantClient
-            from app.embeddings import LocalEmbedding
-            
-            client = QdrantClient("localhost:6333")
-            embedding = LocalEmbedding().encode(query)
-            
-            results = client.query_points(
-                collection_name="fantasy_scenarios",
-                query=embedding,
-                limit=2
-            ).points
-            
-            return {
-                "query": query,
-                "scenarios": [r.payload for r in results]
-            }
-            
-        else:
-            return {"error": "Unknown function"}
-            
     except Exception as e:
-        logger.error(f"[DATA ERROR] {e}")
-        return {"error": str(e)}
+        logger.error(f"[{sport.upper()} ERROR] {e}")
+        traceback.print_exc()
+        return {"results": []}
 
-def format_data_for_vapi(raw_data):
-    """
-    Format raw data as a string that Vapi's LLM can process.
-    The LLM will use this to generate a natural response.
-    """
-    if not raw_data:
-        return "No data found for this query."
-    
-    if "error" in raw_data:
-        return f"Error retrieving data: {raw_data['error']}"
-    
-    # Convert dict to formatted string
-    # Vapi's GPT-5.4 will read this and craft a response
-    return json.dumps(raw_data, indent=2)
+
+@app.post("/vapi/webhook/{sport}")
+async def sport_webhook(sport: str, request: Request):
+    """Dynamic webhook for any registered sport."""
+    return await dispatch_sport_webhook(sport, request)
+
+
+# Legacy redirect for backward compatibility
+@app.post("/vapi/cricket-webhook")
+async def legacy_cricket_webhook(request: Request):
+    """Deprecated: use /vapi/webhook/cricket instead."""
+    return await dispatch_sport_webhook("cricket", request)
+
 
 @app.get("/")
 async def root():
-    return {"status": "running", "mode": "data-only", "cricket_available": CRICKET_AVAILABLE}
+    return {
+        "status": "running",
+        "mode": "multi-sport-data-only",
+        "sports": list(SPORT_HANDLERS.keys()),
+    }

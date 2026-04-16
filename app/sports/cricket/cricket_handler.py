@@ -7,7 +7,7 @@ import os
 import json
 from typing import Dict, List
 from qdrant_client import QdrantClient
-from app.cricket_data import get_player_by_name, get_venue_by_name
+from app.sports.cricket.cricket_data import get_player_by_name, get_venue_by_name
 from app.embeddings import LocalEmbedding
 
 # Configuration
@@ -15,6 +15,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 
 class CricketQueryHandler:
     """Handle cricket-related queries - returns data only, no LLM processing"""
+    sport = "cricket"
     
     def __init__(self):
         self.qdrant = QdrantClient(url=QDRANT_URL)
@@ -34,7 +35,7 @@ class CricketQueryHandler:
             embedding = self._get_embedding(query)
             
             results = self.qdrant.query_points(
-                collection_name="match_moments",
+                collection_name="cricket_match_moments",
                 query=embedding,
                 limit=3
             ).points
@@ -95,7 +96,7 @@ class CricketQueryHandler:
                 # Also search for related context
                 embedding = self._get_embedding(f"{player_name} performance stats")
                 results = self.qdrant.query_points(
-                    collection_name="player_context",
+                    collection_name="cricket_players",
                     query=embedding,
                     limit=1
                 ).points
@@ -114,7 +115,7 @@ class CricketQueryHandler:
                 # Search in Qdrant
                 embedding = self._get_embedding(query or f"{player_name} cricket stats")
                 results = self.qdrant.query_points(
-                    collection_name="player_context",
+                    collection_name="cricket_players",
                     query=embedding,
                     limit=3
                 ).points
@@ -170,7 +171,7 @@ class CricketQueryHandler:
                 # Search in Qdrant
                 embedding = self._get_embedding(f"{venue_name} stadium pitch conditions")
                 results = self.qdrant.query_points(
-                    collection_name="venue_insights",
+                    collection_name="cricket_venues",
                     query=embedding,
                     limit=2
                 ).points
@@ -204,7 +205,7 @@ class CricketQueryHandler:
             embedding = self._get_embedding(query)
             
             results = self.qdrant.query_points(
-                collection_name="fantasy_scenarios",
+                collection_name="cricket_fantasy_scenarios",
                 query=embedding,
                 limit=3
             ).points
@@ -251,7 +252,7 @@ class CricketQueryHandler:
             # Search across all collections
             all_results = []
             
-            for collection in ["match_moments", "player_context", "venue_insights", "fantasy_scenarios"]:
+            for collection in ["cricket_match_moments", "cricket_players", "cricket_venues", "cricket_fantasy_scenarios"]:
                 try:
                     results = self.qdrant.query_points(
                         collection_name=collection,
