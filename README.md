@@ -1,142 +1,92 @@
-# 🏟️ The Huddle
+# The Huddle
 
-A **multi-sport fantasy assist platform** powered by **Vapi Squads** and **Qdrant**.
+The Huddle is a voice-first AI agent concept for Bangalore local government services. This project is based on the source brief [Voice-First AI Agent for Bangalore Local Government Services: Three High-Impact Use-Cases](./Voice-First%20AI%20Agent%20for%20Bangalore%20Local%20Government%20Services_%20Three%20High-Impact%20Use-Cases.pdf).
 
-Users call a phone number, are greeted by the Huddle Host, pick their sport (Cricket, Football, or Chess), and get seamlessly handed off to a specialized sport guru that answers fantasy and stats questions by voice.
+## Problem Statement
 
-```
-Voice Input → Vapi Squad → Huddle Host → Sport Guru → FastAPI → Qdrant → Voice Response
-```
+Citizens in Bangalore often face fragmented service delivery, confusing procedures, language barriers, low-visibility status tracking, and heavy dependence on in-person visits or intermediaries for routine government tasks. The Huddle is designed to reduce that friction through a multilingual, accessible, voice-led assistant that helps people understand requirements, prepare documents, route requests correctly, and stay updated throughout the process.
 
-## Supported Sports
+## Focus Areas
 
-| Sport | Guru | Example Queries |
-|-------|------|-----------------|
-| 🏏 Cricket | Cricket Guru | "How did Kohli perform?" / "Who should I captain?" |
-| ⚽ Football | Football Guru | "Is Haaland a good captain this week?" / "Tell me about Old Trafford" |
-| ♟️ Chess | Chess Guru | "How good is Gukesh?" / "What opening should I learn?" |
+### 1. Birth and Death Certificate Services Navigator
 
-## Project Structure
+This use case focuses on helping citizens:
 
-```
-the-huddle/
-├── app/
-│   ├── main.py                      # FastAPI app with sport webhooks
-│   ├── embeddings.py                # Deterministic embedding loader
-│   └── sports/
-│       ├── __init__.py              # Sport registry
-│       ├── base_handler.py          # Base class for all sport handlers
-│       ├── cricket/
-│       │   ├── cricket_data.py      # Cricket match/player/venue data
-│       │   ├── cricket_handler.py   # Qdrant queries for cricket
-│       │   └── __init__.py
-│       ├── football/
-│       │   ├── football_data.py
-│       │   ├── football_handler.py
-│       │   └── __init__.py
-│       └── chess/
-│           ├── chess_data.py
-│           ├── chess_handler.py
-│           └── __init__.py
-├── data/
-│   ├── cricket_*.json               # Cricket embeddings
-│   ├── football_*.json              # Football embeddings
-│   └── chess_*.json                 # Chess embeddings
-├── scripts/
-│   ├── generate_embeddings.py       # Generate embeddings for any sport
-│   └── setup_qdrant.py              # Create collections & load data
-├── vapi-squad/
-│   ├── squad-config.json            # Vapi Squad configuration template
-│   ├── huddle-host-prompt.md
-│   ├── cricket-guru-prompt.md
-│   ├── football-guru-prompt.md
-│   └── chess-guru-prompt.md
-├── docker-compose.yml
-└── requirements.txt
-```
+- determine whether they need a new registration, late registration, correction, or duplicate certificate
+- understand deadlines, penalties, and correction pathways
+- generate dynamic document checklists based on their situation
+- get guided help for affidavit preparation and notarization
+- track application progress and receive follow-up reminders
 
-## Quick Start
+### 2. Property Tax Assistance and Compliance Guide
 
-### 1. Start Qdrant
+This use case focuses on helping citizens:
 
-```bash
-docker start qdrant
-# or if not created:
-docker run -d -p 6333:6333 qdrant/qdrant
-```
+- understand tax liability and assessment logic in plain language
+- navigate khata-related confusion and supporting records
+- get help with payment planning, due dates, and compliance steps
+- prepare dispute documentation and escalation requests
+- receive proactive reminders about deadlines and regulatory changes
 
-### 2. Set up Collections
+### 3. Integrated Public Grievance Redressal System
 
-```bash
-cd the-huddle
-python scripts/setup_qdrant.py
-```
+This use case focuses on helping citizens:
 
-This creates all 12 collections (4 per sport) and loads the pre-computed embeddings.
+- describe civic complaints in natural language or voice
+- route grievances to the correct department automatically
+- understand complaint status, timelines, and escalation options
+- use historical case patterns to improve guidance
+- access grievance support without depending on smartphones or bureaucratic knowledge
 
-### 3. Start the Backend
+## Core Agent Capabilities
 
-```bash
-uvicorn app.main:app --reload --port 8000
-```
+- Voice-guided conversational intake instead of form-heavy workflows
+- Personalized document and action checklists
+- Eligibility assessment and pathway selection
+- Status tracking with proactive notifications
+- Retrieval-augmented guidance grounded in government rules, records, and service procedures
+- Department routing and escalation management
+- Low-literacy interaction design with confirmation loops
+- Guided document capture support for users with camera-enabled phones
 
-### 4. Expose with ngrok
+## Accessibility and Language Support
 
-```bash
-ngrok http 8000
-```
+The source brief emphasizes inclusive access for Bangalore's multilingual population. The Huddle is intended to support:
 
-Copy the `https` URL (e.g., `https://abc123.ngrok-free.app`).
+- Kannada, Hindi, Tamil, Telugu, and English
+- code-switching during natural speech
+- low-literacy users through slower, confirmatory conversational flows
+- non-smartphone users through phone-first interaction patterns
+- citizens who need simpler explanations of procedural and legal language
 
-### 5. Configure Vapi Squad
+## Data and Knowledge Layer
 
-1. In the Vapi dashboard, create **4 assistants**:
-   - **Huddle Host** — no server URL needed
-   - **Cricket Guru** — server URL: `{ngrok-url}/vapi/webhook/cricket`
-   - **Football Guru** — server URL: `{ngrok-url}/vapi/webhook/football`
-   - **Chess Guru** — server URL: `{ngrok-url}/vapi/webhook/chess`
+The concept described in the PDF relies on retrieval from service-specific operational and policy sources, including:
 
-2. Copy the system prompts from `vapi-squad/*.md` into each assistant.
+- BBMP and related civic service records
+- registration and certificate systems such as eJanMa
+- property tax and khata-related data sources
+- grievance routing and department workflow systems
+- published legal, procedural, and regulatory rules
 
-3. Add the same 5 functions to each guru:
-   - `query_match_moment(query: string)`
-   - `get_player_stats(player_name: string)`
-   - `get_venue_insights(venue_name: string)`
-   - `get_fantasy_advice(query: string)`
-   - `general_sport_query(query: string)`
+This suggests a RAG-driven architecture where policy knowledge, service workflows, and case context are combined to generate accurate and actionable responses.
 
-4. Add handoff tools so the Host can transfer to each guru, and each guru can transfer back to the Host.
+## Why This Matters
 
-5. Create a **Squad** in Vapi and add the 4 members. See `vapi-squad/squad-config.json` for the structure.
+The Huddle is framed around practical public-service impact:
 
-## Adding a New Sport
+- fewer unnecessary office visits
+- better access for migrant and low-income communities
+- reduced dependence on paid intermediaries
+- improved procedural clarity and compliance
+- faster and more transparent service outcomes
 
-1. Create `app/sports/<sport>/<sport>_data.py` with the standard getters:
-   - `get_all_moments()`, `get_all_players()`, `get_all_venues()`, `get_all_scenarios()`
+## Source
 
-2. Create `app/sports/<sport>/<sport>_handler.py` implementing `BaseSportHandler`.
+This README is based on the PDF in this repository:
 
-3. Create `app/sports/<sport>/__init__.py` exporting the handler functions.
+- [Voice-First AI Agent for Bangalore Local Government Services: Three High-Impact Use-Cases](./Voice-First%20AI%20Agent%20for%20Bangalore%20Local%20Government%20Services_%20Three%20High-Impact%20Use-Cases.pdf)
 
-4. Generate embeddings:
-   ```bash
-   python scripts/generate_embeddings.py <sport>
-   ```
+## Note
 
-5. Register the sport in `app/main.py` by adding the handler imports to `SPORT_HANDLERS`.
-
-6. Re-run `python scripts/setup_qdrant.py`.
-
-## Architecture Notes
-
-- **Data-only pattern:** The backend returns raw JSON. Vapi's built-in LLM converts it into natural language.
-- **Deterministic embeddings:** Uses hash-based embeddings (no PyTorch/OpenAI APIs needed).
-- **Separate webhooks:** Each sport guru has its own endpoint for clean separation.
-
-## Troubleshooting
-
-**Qdrant connection error:** Make sure Docker is running at `localhost:6333`.
-
-**Vapi not calling webhook:** Check that the ngrok URL is updated in the Vapi dashboard and includes the correct `/vapi/webhook/<sport>` path.
-
-**Empty responses:** Run `python scripts/setup_qdrant.py` to ensure all collections are populated.
+This README intentionally reflects the product vision and use-case framing from the source document only. It does not describe the current codebase or implementation details.
