@@ -161,3 +161,41 @@ async def root():
         "mode": "bengaluru-government-services",
         "services": list(SERVICE_HANDLERS.keys()),
     }
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "services_registered": list(SERVICE_HANDLERS.keys()),
+        "service_count": len(SERVICE_HANDLERS),
+    }
+
+
+@app.get("/demo/scenarios")
+async def demo_scenarios():
+    return {
+        "project": "Bengaluru Sahayaka",
+        "recommended_demo_order": [
+            {
+                "service": "certificates",
+                "scenario": "Late home birth registration at 45 days",
+                "tools": ["assess_eligibility", "generate_document_checklist", "get_affidavit_template"],
+            },
+            {
+                "service": "tax",
+                "scenario": "Citizen asks for a property tax estimate and payment guidance",
+                "tools": ["get_tax_estimate", "get_payment_options"],
+            },
+            {
+                "service": "grievances",
+                "scenario": "Citizen reports pothole plus drainage issue and asks how to follow up",
+                "tools": ["file_complaint", "get_complaint_status"],
+            },
+        ],
+        "judge_talking_points": [
+            "Voice-first access for citizens who are not comfortable with forms and portals.",
+            "Multilingual assistant flow with structured routing and simple explanations.",
+            "Three high-impact public-service journeys in one assistant ecosystem.",
+        ],
+    }

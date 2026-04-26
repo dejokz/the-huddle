@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
-QDRANT_URL = os.getenv("QDRANT_URL", "localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 VECTOR_DIM = 384
 
 

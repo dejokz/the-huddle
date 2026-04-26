@@ -54,7 +54,7 @@ class CertificateQueryHandler:
         try:
             # If explicit params missing, fall back to RAG on procedures
             if not birth_type or days_since_birth < 0:
-                results = self._rag_search("cert_procedures", query or "eligibility assessment", limit=3)
+                results = self._rag_search("certificates_procedures", query or "eligibility assessment", limit=3)
                 data = {
                     "query": query or "eligibility assessment",
                     "type": "eligibility",

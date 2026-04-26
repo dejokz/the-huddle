@@ -1,25 +1,25 @@
 {
-  "name": "The Huddle",
+  "name": "Bengaluru Sahayaka",
   "members": [
     {
-      "name": "Huddle Host",
+      "name": "Bengaluru Sahayaka Host",
       "assistantId": "<HOST_ASSISTANT_ID>",
       "serverUrl": null
     },
     {
-      "name": "Cricket Guru",
-      "assistantId": "<CRICKET_ASSISTANT_ID>",
-      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/cricket"
+      "name": "Birth & Death Certificates Assistant",
+      "assistantId": "<CERTIFICATE_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/certificates"
     },
     {
-      "name": "Football Guru",
-      "assistantId": "<FOOTBALL_ASSISTANT_ID>",
-      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/football"
+      "name": "Property Tax Assistant",
+      "assistantId": "<PROPERTY_TAX_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/tax"
     },
     {
-      "name": "Chess Guru",
-      "assistantId": "<CHESS_ASSISTANT_ID>",
-      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/chess"
+      "name": "Public Grievance Assistant",
+      "assistantId": "<PUBLIC_GRIEVANCE_ASSISTANT_ID>",
+      "serverUrl": "https://ef5d-103-162-211-98.ngrok-free.app/vapi/webhook/grievances"
     }
   ]
 }
