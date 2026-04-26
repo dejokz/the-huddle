@@ -4,15 +4,17 @@ Loads embeddings from JSON files (no PyTorch/API needed)
 """
 
 import json
+import hashlib
+import struct
 import numpy as np
 from typing import List, Union
 from pathlib import Path
 
-# Simple deterministic embedding for queries
 def deterministic_embedding(text: str, dim: int = 384) -> list:
-    """Generate deterministic pseudo-embeddings using text hash"""
-    hash_val = hash(text) % (2**32)
-    rng = np.random.RandomState(hash_val)
+    """Generate deterministic pseudo-embeddings using SHA-256 hash (process-stable)"""
+    h = hashlib.sha256(text.encode("utf-8")).digest()
+    seed = struct.unpack("<I", h[:4])[0]
+    rng = np.random.RandomState(seed)
     vec = rng.randn(dim)
     vec = vec / np.linalg.norm(vec)
     return vec.tolist()
